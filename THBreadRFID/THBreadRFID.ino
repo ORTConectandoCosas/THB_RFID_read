@@ -1,5 +1,5 @@
 //Ejemplo adaptado de https://www.teachmemicro.com/arduino-rfid-rc522-tutorial/
-// pin NodeMCU  en  https://www.instructables.com/id/MFRC522-RFID-Reader-Interfaced-With-NodeMCU/
+// pin NodeMCU  en https://github.com/miguelbalboa/rfid o  https://www.instructables.com/id/MFRC522-RFID-Reader-Interfaced-With-NodeMCU/
 
 #include <SPI.h>
 #include <MFRC522.h>
@@ -19,6 +19,10 @@ byte nuidPICC[4];
 char uidString[9]; // 4 x 2 chars for the 4 bytes + trailing '\0'
 
 //-------------------------------------------------------------
+// LED Pins
+int redpin = D0; // select the pin for the red LED
+int bluepin = D1; // select the pin for the blue LED
+int greenpin = D8 ;// select the pin for the green LED
 
 
 void setup() { 
@@ -27,7 +31,10 @@ void setup() {
   //RFID communication and initialization
   initRFIDReader();
 
- 
+  // led setup
+  pinMode (redpin, OUTPUT);
+  pinMode (bluepin, OUTPUT);
+  pinMode (greenpin, OUTPUT);
 }
  
 void loop() {
