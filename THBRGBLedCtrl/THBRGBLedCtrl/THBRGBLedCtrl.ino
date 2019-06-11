@@ -117,7 +117,7 @@ void processRequest(char *message)
   DeserializationError err = deserializeJson(doc, message);
   
   if (err) {
-    Serial.print(F("deserializeJson() failed with code "));
+    Serial.print(("deserializeJson() failed with code "));
     Serial.println(err.c_str());
     return;
   }
