@@ -4,10 +4,10 @@
 #include <SPI.h>
 #include <MFRC522.h>
 
-// includes de bibliotecas para comunicación
+// includes comunicación libs
 #include <PubSubClient.h>
 #include <ESP8266WiFi.h>
-#include <ArduinoJson.h> // instalar versión 6 de esta biblioteca
+#include <ArduinoJson.h> // check if you are using versión 6 
 
 //***************MODIFICAR PARA SU PROYECTO *********************
 //  configuración datos wifi 
@@ -25,7 +25,7 @@
 char thingsboardServer[] = "demo.thingsboard.io";
 
 /*definir topicos.
- * telemetry - use it to send telemetry
+ * telemetry - use to send telemetry
  * request -  use to receive and send requests to server
  * attributes - to receive commands from server to device
  */
@@ -40,6 +40,7 @@ PubSubClient client(wifiClient);
 
 //-------------------------------------------------------------
 //RFID Reader Pins and setup
+//-------------------------------------------------------------
 #define SS_PIN D4
 #define RST_PIN D3
  
@@ -47,38 +48,43 @@ MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
 
 MFRC522::MIFARE_Key key; 
 
-// Init array that will store new NUID 
+// Init array that will store new UID and String to store UID
 byte nuidPICC[4];
 char uidString[9]; // 4 x 2 chars for the 4 bytes + trailing '\0'
 
 //-------------------------------------------------------------
-// Avoidance 
+// Avoidance sensor
+//-------------------------------------------------------------
 int avoidancePin = D1;
+bool bottleDetected = false;
 
-//Led Colors
+//-------------------------------------------------------------
+//Led colors
 enum LEDColors {RED, BLUE, GREEN} ledColor;
+//-------------------------------------------------------------
 
+//-------------------------------------------------------------
 // app logic state of userRead, userAuthenticated and bottleDetected
 int userCardRead = -2; // 0 - read, -1 ==  not read
 bool userAuthenticated = false;
 bool userCredited = false;
-bool bottleDetected = false;
-bool serverRequestInProgress = false;
 bool transactionInProcess = false;
 
-// declarar variables control loop (para no usar delay() en loop
+//-------------------------------------------------------------
+// THB request timer variables
+//-------------------------------------------------------------
 unsigned long lastSend;
-int elapsedTime = 3000; // tiempo transcurrido entre envios al servidor
-int requestNumber =1;
+int elapsedTime = 3000; // elapsed time request vs reply
+int requestNumber =1;  
+bool serverRequestInProgress = false;
 
+// App Logic
 void setup() { 
   Serial.begin(9600);
 
-  // init wifi y pubsus
+  // init wifi & pubsus callbacks
   connectToWiFi();
   client.setServer(thingsboardServer, 1883);
-
-  // setup callbacks
   client.setCallback(on_message);
    
   lastSend = 0; // variable to ctrl delays
