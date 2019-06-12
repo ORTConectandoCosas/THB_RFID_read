@@ -49,7 +49,6 @@ MFRC522::MIFARE_Key key;
 
 // Init array that will store new NUID 
 byte nuidPICC[4];
-
 char uidString[9]; // 4 x 2 chars for the 4 bytes + trailing '\0'
 
 //-------------------------------------------------------------
@@ -64,13 +63,12 @@ int userCardRead = -2; // 0 - read, -1 ==  not read
 bool userAuthenticated = false;
 bool userCredited = false;
 bool bottleDetected = false;
-bool transactionInProcess = false;
 bool serverRequestInProgress = false;
-
+bool transactionInProcess = false;
 
 // declarar variables control loop (para no usar delay() en loop
 unsigned long lastSend;
-int elapsedTime = 1000; // tiempo transcurrido entre envios al servidor
+int elapsedTime = 3000; // tiempo transcurrido entre envios al servidor
 int requestNumber =1;
 
 void setup() { 
@@ -92,9 +90,11 @@ void setup() {
 }
  
 void loop() 
-{
+{  
     if ( !client.connected() ) {
     reconnect();
+    stopServerRequestTimer();
+    return;
     }
 
     if (transactionInProcess == false) {
@@ -108,7 +108,7 @@ void loop()
           // call server for authentication
           requestUserAuthentication(uidString);
     
-          // note: userAuthenticated variable is set by the server response on methos on_message
+          // note: async userAuthenticated variable is set by the server response on methods called by on_message()
           if(userAuthenticated) {
             Serial.println("user ok");
     
@@ -125,7 +125,7 @@ void loop()
 
               requestCreditToUser(uidString);
 
-              // note: userCredited variable is set by the server response on methos on_message
+              // note: async userCredited variable is set by the server response on methods called by on_message()
               if (userCredited) {
                 Serial.println("user credited");
                  transactionInProcess = false;
@@ -140,25 +140,44 @@ void loop()
           }
       }
     }
+
   client.loop();
+
+  // check for server timeout
+  checkRequestInProgressTimeout();
 }
 
-
-void  requestToLedDevice(LEDColors led, String action)
+// server RPC Request only
+void  requestToLedDevice(LEDColors ledColor, String action)
 {
+    const int capacity = JSON_OBJECT_SIZE(3);
+    StaticJsonDocument<capacity> doc;
+    doc["LedBehaviour"] = action;
+    doc["Color"] = ledColor;
+    
+    String output = "";
+    serializeJson(doc, output);
+    
+    Serial.print("json to send:");
+    Serial.println(output);
 
+   char attributes[100];
+   output.toCharArray( attributes, 100 );
+   if (client.publish( requestTopic, attributes ) == true)
+    Serial.println("publicado ok");
 }
 
-// server RPC Calls
+// server RPC Request only & Reply (see on_message)
 void requestUserAuthentication(char *)
 {    
-  if (serverRequestInProgress == false) {
-    serverRequestInProgress = true;
+  if (isServerRequestTimerInProgress() == false) {
+    startServerRequestTimer();
+    
     userAuthenticated = false;
     
     const int capacity = JSON_OBJECT_SIZE(3);
     StaticJsonDocument<capacity> doc;
-    doc["method"] = "checkUser";
+    doc["method"] = "checkUserID";
     doc["user"] = uidString;
     String output = "";
     serializeJson(doc, output);
@@ -171,20 +190,20 @@ void requestUserAuthentication(char *)
    if (client.publish( requestTopic, attributes ) == true)
     Serial.println("publicado ok");
     else {
-        serverRequestInProgress = false;
-    }
-        
+       stopServerRequestTimer();
+    }     
   }
 }
 
-
+// server RPC Request only & Reply (see on_message)
 void requestCreditToUser(char *)
 {
-   if (serverRequestInProgress == false) {
-    serverRequestInProgress = true;
+   if (isServerRequestTimerInProgress() == false) {
+    startServerRequestTimer(); 
+    
     const int capacity = JSON_OBJECT_SIZE(3);
     StaticJsonDocument<capacity> doc;
-    doc["method"] = "creditUser";
+    doc["method"] = "creditPointsToUser";
     doc["user"] = uidString;
     
     String output = "";
@@ -198,7 +217,7 @@ void requestCreditToUser(char *)
    if (client.publish( requestTopic, attributes ) == true)
     Serial.println("publicado ok");
     else {
-       serverRequestInProgress = false;
+      stopServerRequestTimer();
     }
    }
 }
@@ -231,12 +250,14 @@ void on_message(const char* topic, byte* payload, unsigned int length)
     processRequest(message);
   }
 
+  //message received stop timer
+  stopServerRequestTimer();
 }
+
 
 // Process request
 void processRequest(char *message)
 {
-
   // Decode JSON request with ArduinoJson 6 https://arduinojson.org/v6/doc/deserialization/
   // Notar que a modo de ejemplo este mensaje se arma utilizando la librería ArduinoJson en lugar de desarmar el string a "mano"
   
@@ -246,11 +267,12 @@ void processRequest(char *message)
   
   if (err) {
     Serial.print(("deserializeJson() failed with code "));
-    Serial.println(err.c_str());\
+    Serial.println(err.c_str());
+    
     return;
   }
 
-  serverRequestInProgress = false;
+  
     
   String methodName = doc["method"];
   if (methodName.equals("userAth")) {
@@ -263,11 +285,42 @@ void processRequest(char *message)
   } 
 }
 
+// start requestInProgress timer
+void startServerRequestTimer()
+{
+    serverRequestInProgress = true;
+    lastSend = millis();   //set timer
+}
+
+// stop requestInProgress timer
+void stopServerRequestTimer()
+{
+    serverRequestInProgress = false;
+}
+
+// check requestInProgress timer status
+bool isServerRequestTimerInProgress()
+{
+  return (serverRequestInProgress);
+}
+
+// check requestInProgress for timeout
+void checkRequestInProgressTimeout()
+{
+  if ((millis() - lastSend > elapsedTime) && isServerRequestTimerInProgress() == true) { // Update and send only after 1 seconds
+    Serial.println("-> Server RPC timeout");
+    stopServerRequestTimer();
+  }
+
+}
+
+
 /* 
  *  Solution Sensor management functions
  *
  */
  
+//Check Avoidance sensor for bottle
 bool detectBottle()
 {
     return (digitalRead(avoidancePin) == LOW ? true: false);
@@ -292,6 +345,7 @@ void initRFIDReader()
 // return 0- ok - UID in nuidPICC
 //         -1 - no reading
 int readRFIDCard() {
+  
     // Look for new cards
   if ( ! rfid.PICC_IsNewCardPresent())
     return -1;
@@ -329,10 +383,11 @@ void storeHexRepresentation(char *b, const byte v)
 
 //***************NO MODIFICAR - Conexion con Wifi y ThingsBoard *********************
 /*
- * THB connection and topics
+ * THB connection and topics subscription
  */
 void reconnect() {
   int statusWifi = WL_IDLE_STATUS;
+  
   // Loop until we're reconnected
   while (!client.connected()) {
     statusWifi = WiFi.status();
@@ -360,7 +415,7 @@ void reconnect() {
  
 /*
  * 
- * función para conectarse a wifi
+ *  wifi connection
  */
 void connectToWiFi()
 {
