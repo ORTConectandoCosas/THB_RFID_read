@@ -12,13 +12,13 @@
 //***************MODIFICAR PARA SU PROYECTO *********************
 //  configuración datos wifi 
 // descomentar el define y poner los valores de su red y de su dispositivo
-#define WIFI_AP "SSID"
-#define WIFI_PASSWORD "pass"
+#define WIFI_AP "WIFNAME"
+#define WIFI_PASSWORD "wifiPASS"
 
 
 //  configuración datos thingsboard
-#define NODE_NAME "Nombre dispositivo THB"   //nombre que le pusieron al dispositivo cuando lo crearon
-#define NODE_TOKEN "Token dispositivo THB"   //Token que genera Thingboard para dispositivo cuando lo crearon
+#define NODE_NAME "THBDEV"   //nombre que le pusieron al dispositivo cuando lo crearon
+#define NODE_TOKEN "THBTOKEN"   //Token que genera Thingboard para dispositivo cuando lo crearon
 
 
 //***************NO MODIFICAR *********************
@@ -31,7 +31,9 @@ char thingsboardServer[] = "demo.thingsboard.io";
  */
 char telemetryTopic[] = "v1/devices/me/telemetry";
 char requestTopic[] = "v1/devices/me/rpc/request/+";  //RPC - El Servidor usa este topico para enviar rquests, cliente response
+char responseTopic[] = "v1/devices/me/rpc/response/+"; // RPC responce
 char attributesTopic[] = "v1/devices/me/attributes";  //El Servidor usa este topico para enviar atributos
+
 
 // declarar cliente Wifi y PubSus
 WiFiClient wifiClient;
@@ -68,7 +70,8 @@ enum LEDColors {RED, BLUE, GREEN} ledColor;
 int userCardRead = -2; // 0 - read, -1 ==  not read
 bool userAuthenticated = false;
 bool userCredited = false;
-bool transactionInProcess = false;
+enum transactionSteps {READCARD, AUTH, WAIT_AUTH, DETECTBTL, CREDITUSER, WAIT_CREDITUSER, END};
+transactionSteps transactionInProcess = READCARD;
 
 //-------------------------------------------------------------
 // THB request timer variables
@@ -83,43 +86,62 @@ void setup() {
   Serial.begin(9600);
 
   // init wifi & pubsus callbacks
+  Serial.println("init connection"),
+  
   connectToWiFi();
+  delay(10);
+  
   client.setServer(thingsboardServer, 1883);
   client.setCallback(on_message);
    
   lastSend = 0; // variable to ctrl delays
-
+      
   //RFID communication and initialization
   initRFIDReader();
-
+  Serial.print("Init RFID ...");
+      
   pinMode(avoidancePin, INPUT);
+
+  Serial.print("STATE:");
+  Serial.println(transactionInProcess);
 }
  
 void loop() 
 {  
     if ( !client.connected() ) {
     reconnect();
+    transactionInProcess = READCARD;
     stopServerRequestTimer();
-    return;
     }
-
-    if (transactionInProcess == false) {
-      userCardRead = readRFIDCard();  // read card
-      transactionInProcess = true;
-    } else {
-      if (userCardRead == 0) { // ok user card read
-          Serial.print("UID:" );
-          Serial.println(uidString);
     
+    if (transactionInProcess == READCARD) {
+      userCardRead = readRFIDCard();  // read card
+      if (userCardRead ==0) {
+        Serial.println("Card ok");
+        transactionInProcess = AUTH;
+      }
+    }
+    
+    if (transactionInProcess == AUTH) {
           // call server for authentication
           requestUserAuthentication(uidString);
-    
+
+          Serial.println("Request auth");
+          transactionInProcess = WAIT_AUTH;
+          
+      }
+
+    if (transactionInProcess == WAIT_AUTH) {
           // note: async userAuthenticated variable is set by the server response on methods called by on_message()
           if(userAuthenticated) {
             Serial.println("user ok");
-    
+            transactionInProcess = DETECTBTL;
+          }
+      }
+
+    if (transactionInProcess == DETECTBTL) {
             // call server to set led
-            requestToLedDevice(GREEN, "ON");
+            //requestToLedDevice(GREEN, "ON");
             
             // check if bottle drop sensor
             bottleDetected = detectBottle();
@@ -127,30 +149,40 @@ void loop()
             if (bottleDetected) {
               Serial.println("bottle ok");
               // flash to signal bottle ok
-              requestToLedDevice(GREEN, "FLASH");
-
+              //requestToLedDevice(GREEN, "FLASH");
+              transactionInProcess = CREDITUSER;
+            }
+    }
+    
+    if (transactionInProcess == CREDITUSER) {
               requestCreditToUser(uidString);
 
+              Serial.println("Request credited for user");
+              transactionInProcess = WAIT_CREDITUSER;
+        
+    }
+
+    if (transactionInProcess == WAIT_CREDITUSER) {
               // note: async userCredited variable is set by the server response on methods called by on_message()
               if (userCredited) {
                 Serial.println("user credited");
-                 transactionInProcess = false;
-              } else {
-                Serial.println("waiting for user credit");
-              }
-            } else {
-                Serial.println("bottle not detected");
-            }
-          } else {
-             Serial.println("waiting for user auth");
-          }
-      }
+                 transactionInProcess = END;
+              } 
     }
 
-  client.loop();
-
+    if (transactionInProcess == END) {
+       transactionInProcess = READCARD;
+       userCredited = false;
+       bottleDetected = false;
+       userAuthenticated = false;
+       Serial.println("-------- END ------------");
+    }
+ 
   // check for server timeout
   checkRequestInProgressTimeout();
+ 
+  client.loop();
+
 }
 
 // server RPC Request only
@@ -179,23 +211,29 @@ void requestUserAuthentication(char *)
   if (isServerRequestTimerInProgress() == false) {
     startServerRequestTimer();
     
-    userAuthenticated = false;
-    
     const int capacity = JSON_OBJECT_SIZE(3);
     StaticJsonDocument<capacity> doc;
     doc["method"] = "checkUserID";
-    doc["user"] = uidString;
+    doc["params"] = uidString;
     String output = "";
     serializeJson(doc, output);
     
-    Serial.print("json to send:");
-    Serial.println(output);
-
-   char attributes[100];
+    char attributes[100];
     output.toCharArray( attributes, 100 );
-   if (client.publish( requestTopic, attributes ) == true)
-    Serial.println("publicado ok");
-    else {
+    
+    requestNumber++;
+    
+    String requestCmnd = String("v1/devices/me/rpc/request/") + String(requestNumber);
+
+    Serial.print("TOPIC:");
+    Serial.print(requestCmnd);
+    Serial.print("  --- >json to send:");
+    Serial.println(output);
+    
+   if (client.publish(requestCmnd.c_str() , attributes ) == true) {
+      Serial.println("publicado ok");
+    } else {
+       Serial.println("publicado ERROR");
        stopServerRequestTimer();
     }     
   }
@@ -210,7 +248,7 @@ void requestCreditToUser(char *)
     const int capacity = JSON_OBJECT_SIZE(3);
     StaticJsonDocument<capacity> doc;
     doc["method"] = "creditPointsToUser";
-    doc["user"] = uidString;
+    doc["params"] = uidString;
     
     String output = "";
     serializeJson(doc, output);
@@ -220,11 +258,21 @@ void requestCreditToUser(char *)
 
    char attributes[100];
     output.toCharArray( attributes, 100 );
-   if (client.publish( requestTopic, attributes ) == true)
-    Serial.println("publicado ok");
-    else {
-      stopServerRequestTimer();
-    }
+    requestNumber++;
+    
+    String requestCmnd = String("v1/devices/me/rpc/request/") + String(requestNumber);
+
+    Serial.print("TOPIC:");
+    Serial.print(requestCmnd);
+    Serial.print("  --- >json to send:");
+    Serial.println(output);
+    
+   if (client.publish(requestCmnd.c_str() , attributes ) == true) {
+      Serial.println("publicado ok");
+    } else {
+       Serial.println("publicado ERROR");
+       stopServerRequestTimer();
+    }     
    }
 }
 
@@ -266,6 +314,7 @@ void processRequest(char *message)
 {
   // Decode JSON request with ArduinoJson 6 https://arduinojson.org/v6/doc/deserialization/
   // Notar que a modo de ejemplo este mensaje se arma utilizando la librería ArduinoJson en lugar de desarmar el string a "mano"
+
   
   const int capacity = JSON_OBJECT_SIZE(4);
   StaticJsonDocument<capacity> doc;
@@ -277,17 +326,15 @@ void processRequest(char *message)
     
     return;
   }
-
-  
     
   String methodName = doc["method"];
-  if (methodName.equals("userAth")) {
+  if (methodName.equals("checkUserID")) {
     bool authResponse = doc["params"];
-    userAuthenticated = authResponse;
+    userAuthenticated = true;
 
-  } else if (methodName.equals("userCredited")) {
+  } else if (methodName.equals("creditPointsToUser")) {
     bool creditResponse = doc["params"];
-    userCredited = creditResponse;
+    userCredited = true;
   } 
 }
 
@@ -329,7 +376,8 @@ void checkRequestInProgressTimeout()
 //Check Avoidance sensor for bottle
 bool detectBottle()
 {
-    return (digitalRead(avoidancePin) == LOW ? true: false);
+    return true;
+    //return (digitalRead(avoidancePin) == LOW ? true: false);
 }
 
 
@@ -339,26 +387,32 @@ bool detectBottle()
  */
 void initRFIDReader()
 {
+  Serial.println("RFID Reader Init start"),
   SPI.begin(); // Init SPI bus
   rfid.PCD_Init(); // Init MFRC522 
 
   for (byte i = 0; i < 6; i++) {
     key.keyByte[i] = 0xFF;
   }
+
 }
 
 // read RFID Card 
 // return 0- ok - UID in nuidPICC
 //         -1 - no reading
 int readRFIDCard() {
-  
     // Look for new cards
-  if ( ! rfid.PICC_IsNewCardPresent())
-    return -1;
+  if ( ! rfid.PICC_IsNewCardPresent()) {
+      return -1;  
+  }
+
 
   // Verify if the NUID has been readed
-  if ( ! rfid.PICC_ReadCardSerial())
-    return - 1;
+  if ( ! rfid.PICC_ReadCardSerial()) {
+          Serial.println("RFID Reader CARD ERROR 2");
+      return -1; 
+  }
+
 
   // copy UID to nuidPICC
  for (byte i = 0; i < 4; i++) {
@@ -407,7 +461,7 @@ void reconnect() {
       // Suscribir al Topico de request
       client.subscribe(requestTopic); 
       client.subscribe(attributesTopic); 
-            
+      client.subscribe(responseTopic);     
     } else {
       Serial.print( "[FAILED] [ rc = " );
       Serial.print( client.state() );
@@ -423,6 +477,7 @@ void reconnect() {
  * 
  *  wifi connection
  */
+ 
 void connectToWiFi()
 {
   Serial.println("Connecting to WiFi ...");
