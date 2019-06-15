@@ -12,13 +12,13 @@
 //***************MODIFICAR PARA SU PROYECTO *********************
 //  configuración datos wifi 
 // descomentar el define y poner los valores de su red y de su dispositivo
-#define WIFI_AP "WIFNAME"
-#define WIFI_PASSWORD "wifiPASS"
+#define WIFI_AP "celg"
+#define WIFI_PASSWORD "explorador34"
 
 
 //  configuración datos thingsboard
-#define NODE_NAME "THBDEV"   //nombre que le pusieron al dispositivo cuando lo crearon
-#define NODE_TOKEN "THBTOKEN"   //Token que genera Thingboard para dispositivo cuando lo crearon
+#define NODE_NAME "RFIDCLIENT"   //nombre que le pusieron al dispositivo cuando lo crearon
+#define NODE_TOKEN "ZSi2JDXSLIQxsmhKSjOe"   //Token que genera Thingboard para dispositivo cuando lo crearon
 
 
 //***************NO MODIFICAR *********************
@@ -113,7 +113,7 @@ void loop()
     transactionInProcess = READCARD;
     stopServerRequestTimer();
     }
-    
+
     if (transactionInProcess == READCARD) {
       userCardRead = readRFIDCard();  // read card
       if (userCardRead ==0) {
@@ -122,21 +122,24 @@ void loop()
       }
     }
     
-    if (transactionInProcess == AUTH) {
+    if (transactionInProcess == AUTH ) {
           // call server for authentication
           requestUserAuthentication(uidString);
-
-          Serial.println("Request auth");
           transactionInProcess = WAIT_AUTH;
-          
+      
       }
 
-    if (transactionInProcess == WAIT_AUTH) {
+
+    if (transactionInProcess == WAIT_AUTH && isServerRequestTimerInProgress() == false) {
           // note: async userAuthenticated variable is set by the server response on methods called by on_message()
           if(userAuthenticated) {
             Serial.println("user ok");
             transactionInProcess = DETECTBTL;
-          }
+          }  else {                
+            Serial.println("user Not Auth");
+            transactionInProcess = END;
+            }
+            
       }
 
     if (transactionInProcess == DETECTBTL) {
@@ -154,20 +157,20 @@ void loop()
             }
     }
     
-    if (transactionInProcess == CREDITUSER) {
+    if (transactionInProcess == CREDITUSER && isServerRequestTimerInProgress() == false) {
               requestCreditToUser(uidString);
-
-              Serial.println("Request credited for user");
               transactionInProcess = WAIT_CREDITUSER;
-        
     }
 
-    if (transactionInProcess == WAIT_CREDITUSER) {
+    if (transactionInProcess == WAIT_CREDITUSER && isServerRequestTimerInProgress() == false) {
               // note: async userCredited variable is set by the server response on methods called by on_message()
               if (userCredited) {
                 Serial.println("user credited");
                  transactionInProcess = END;
-              } 
+              } else {
+                Serial.println("user NOT credited");
+                 transactionInProcess = END;
+              }
     }
 
     if (transactionInProcess == END) {
@@ -175,6 +178,7 @@ void loop()
        userCredited = false;
        bottleDetected = false;
        userAuthenticated = false;
+       serverRequestInProgress = false;
        Serial.println("-------- END ------------");
     }
  
@@ -293,12 +297,15 @@ void on_message(const char* topic, byte* payload, unsigned int length)
   Serial.println(topic);
   Serial.print("Message: ");
   Serial.println( message);
-
+  String topicStr = topic;
+  String topicHead = topicStr.substring(0,strlen("v1/devices/me/rpc/response"));
+  Serial.println(topicHead);
+  
   // Check topic for attributes o request
   if (strcmp(topic, "v1/devices/me/attributes") ==0) { //es un cambio en atributos compartidos
     Serial.println("----> CAMBIO DE ATRIBUTOS");
     //processAttributeRequestCommand(message);
-  } else {
+  } else if (strcmp(topicHead.c_str(), "v1/devices/me/rpc/response") ==0) {
     // request
     Serial.println("----> REQUEST");
     processRequest(message);
@@ -328,14 +335,17 @@ void processRequest(char *message)
   }
     
   String methodName = doc["method"];
-  if (methodName.equals("checkUserID")) {
+  if (methodName.equals("UserApr")) {
     bool authResponse = doc["params"];
-    userAuthenticated = true;
+    userAuthenticated = authResponse;
 
   } else if (methodName.equals("creditPointsToUser")) {
     bool creditResponse = doc["params"];
     userCredited = true;
-  } 
+  } else {
+        userAuthenticated = true;
+            userCredited = true;
+  }
 }
 
 // start requestInProgress timer
