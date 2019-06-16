@@ -1,0 +1,314 @@
+{
+  "ruleChain": {
+    "additionalInfo": null,
+    "name": "RIDReader",
+    "firstRuleNodeId": null,
+    "root": false,
+    "debugMode": true,
+    "configuration": null
+  },
+  "metadata": {
+    "firstNodeIndex": 1,
+    "nodes": [
+      {
+        "additionalInfo": {
+          "layoutX": 709,
+          "layoutY": 59
+        },
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "SendReplyUser",
+        "debugMode": true,
+        "configuration": {
+          "jsScript": "var newMsg = {};\n\nif (msg.method == \"checkUserID\") {\n    var usr = msg.params.trim();\n    if (usr.trim() == metadata.ss_User1_ID.trim()) {\n        newMsg.method = \"UserApr\";\n        newMsg.params = true;\n    } else {\n        newMsg.method = \"UserApr\";\n        newMsg.params = false;\n    }\n    msgType = 'RPC messageToRFIDController';\n    return {msg: newMsg, metadata: metadata, msgType: msgType};\n} else if(msg.method == \"creditPointsToUser\") {\n    msgType = 'POST_ATTRIBUTES_REQUEST';\n    return {msg: msg, metadata: metadata, msgType: msgType};\n} else if (msg.method == \"Led\") {\n    msgType = 'REQUEST_TO_DEVICE';\n    metadata.deviceType = \"LedController\";\n    metadata.deviceName = \"LEDCTRL\";\n    return {msg: msg, metadata: metadata, msgType: msgType};\n}\n"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 211,
+          "layoutY": 261
+        },
+        "type": "org.thingsboard.rule.engine.filter.TbMsgTypeSwitchNode",
+        "name": "mseesageRouter",
+        "debugMode": true,
+        "configuration": {
+          "version": 0
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 933,
+          "layoutY": 199
+        },
+        "type": "org.thingsboard.rule.engine.rpc.TbSendRPCReplyNode",
+        "name": "SendUsrData",
+        "debugMode": true,
+        "configuration": {
+          "requestIdMetaDataAttribute": "requestId"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 220,
+          "layoutY": 25
+        },
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgTimeseriesNode",
+        "name": "save to series",
+        "debugMode": true,
+        "configuration": {
+          "defaultTTL": 0
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 425,
+          "layoutY": 96
+        },
+        "type": "org.thingsboard.rule.engine.metadata.TbGetAttributesNode",
+        "name": "AddUserData",
+        "debugMode": true,
+        "configuration": {
+          "clientAttributeNames": [],
+          "sharedAttributeNames": [],
+          "serverAttributeNames": [
+            "User1_Credit",
+            "User1_ID",
+            "TotalBottles"
+          ],
+          "latestTsKeyNames": []
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 637,
+          "layoutY": 222
+        },
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "checkMsgCtrl",
+        "debugMode": true,
+        "configuration": {
+          "jsScript": "return msgType == 'RPC messageToRFIDController';"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 689,
+          "layoutY": 306
+        },
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "updateCredit",
+        "debugMode": true,
+        "configuration": {
+          "jsScript": "return (msgType === 'POST_ATTRIBUTES_REQUEST');"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 939,
+          "layoutY": 525
+        },
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgAttributesNode",
+        "name": "saveCredit",
+        "debugMode": true,
+        "configuration": {
+          "scope": "SERVER_SCOPE"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 828,
+          "layoutY": 409
+        },
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "addCredit",
+        "debugMode": true,
+        "configuration": {
+          "jsScript": "var newmsg = {};\nvar parameters = msg.params;\nvar sum = parseInt(metadata.ss_User1_Credit) +parseInt(parameters.bottles);\nvar totalBottles = parseInt(metadata.ss_TotalBottles) + parseInt(parameters.bottles);\nnewmsg.User1_Credit = sum;\nnewmsg.TotalBottles = totalBottles;\n\nreturn {msg: newmsg, metadata: metadata, msgType: msgType};"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 271,
+          "layoutY": 393
+        },
+        "type": "org.thingsboard.rule.engine.metadata.TbGetAttributesNode",
+        "name": "addServerAttributes",
+        "debugMode": true,
+        "configuration": {
+          "clientAttributeNames": [],
+          "sharedAttributeNames": [],
+          "serverAttributeNames": [
+            "TotalBottles"
+          ],
+          "latestTsKeyNames": []
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 228,
+          "layoutY": 523
+        },
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "addTotalBottle",
+        "debugMode": true,
+        "configuration": {
+          "jsScript": "var newmsg = {};\nvar bottle = msg.bottle;\nvar totalBottles = parseInt(metadata.ss_TotalBottles) + parseInt(bottle);\nnewmsg.TotalBottles = totalBottles;\nmsgType = 'POST_ATTRIBUTES_REQUEST'\nreturn {msg: newmsg, metadata: metadata, msgType: msgType};"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 216,
+          "layoutY": 632
+        },
+        "type": "org.thingsboard.rule.engine.telemetry.TbMsgAttributesNode",
+        "name": "saveTotalBottles",
+        "debugMode": false,
+        "configuration": {
+          "scope": "SERVER_SCOPE"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 676,
+          "layoutY": 640
+        },
+        "type": "org.thingsboard.rule.engine.rpc.TbSendRPCRequestNode",
+        "name": "SendToLed",
+        "debugMode": true,
+        "configuration": {
+          "timeoutInSeconds": 60
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 559,
+          "layoutY": 388
+        },
+        "type": "org.thingsboard.rule.engine.transform.TbChangeOriginatorNode",
+        "name": "changeTOLedCtro",
+        "debugMode": true,
+        "configuration": {
+          "originatorSource": "RELATED",
+          "relationsQuery": {
+            "direction": "FROM",
+            "maxLevel": 1,
+            "filters": [
+              {
+                "relationType": "Contains",
+                "entityTypes": [
+                  "DEVICE"
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 550,
+          "layoutY": 569
+        },
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "creatLedCommand",
+        "debugMode": true,
+        "configuration": {
+          "jsScript": "\nreturn {msg: msg, metadata: metadata, msgType: msgType};"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 490,
+          "layoutY": 474
+        },
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "checkIfForLed",
+        "debugMode": true,
+        "configuration": {
+          "jsScript": "return (msgType === 'REQUEST_TO_DEVICE');"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "fromIndex": 0,
+        "toIndex": 5,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 1,
+        "toIndex": 3,
+        "type": "Post telemetry"
+      },
+      {
+        "fromIndex": 1,
+        "toIndex": 9,
+        "type": "Post telemetry"
+      },
+      {
+        "fromIndex": 1,
+        "toIndex": 4,
+        "type": "RPC Request from Device"
+      },
+      {
+        "fromIndex": 4,
+        "toIndex": 0,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 5,
+        "toIndex": 6,
+        "type": "False"
+      },
+      {
+        "fromIndex": 5,
+        "toIndex": 2,
+        "type": "True"
+      },
+      {
+        "fromIndex": 6,
+        "toIndex": 13,
+        "type": "False"
+      },
+      {
+        "fromIndex": 6,
+        "toIndex": 2,
+        "type": "True"
+      },
+      {
+        "fromIndex": 6,
+        "toIndex": 8,
+        "type": "True"
+      },
+      {
+        "fromIndex": 8,
+        "toIndex": 7,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 9,
+        "toIndex": 10,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 10,
+        "toIndex": 11,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 13,
+        "toIndex": 15,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 14,
+        "toIndex": 12,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 15,
+        "toIndex": 14,
+        "type": "True"
+      }
+    ],
+    "ruleChainConnections": null
+  }
+}

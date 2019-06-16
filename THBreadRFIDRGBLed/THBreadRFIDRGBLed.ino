@@ -12,13 +12,13 @@
 //***************MODIFICAR PARA SU PROYECTO *********************
 //  configuración datos wifi 
 // descomentar el define y poner los valores de su red y de su dispositivo
-#define WIFI_AP "celg"
-#define WIFI_PASSWORD "explorador34"
+#define WIFI_AP "wifiname"
+#define WIFI_PASSWORD "wifipass"
 
 
 //  configuración datos thingsboard
 #define NODE_NAME "RFIDCLIENT"   //nombre que le pusieron al dispositivo cuando lo crearon
-#define NODE_TOKEN "ZSi2JDXSLIQxsmhKSjOe"   //Token que genera Thingboard para dispositivo cuando lo crearon
+#define NODE_TOKEN "token"   //Token que genera Thingboard para dispositivo cuando lo crearon
 
 
 //***************NO MODIFICAR *********************
@@ -71,8 +71,8 @@ bool userAuthenticated = false;
 bool userCredited = false;
 int totalBottles = 0;
 int userTotalBottles = 0;
-enum cycleStatates {READ_FREE_BTLS, AUTH, WAIT_AUTH, READ_USER_BTLS, CREDITUSER, WAIT_CREDITUSER, END};
-cycleStatates state = READ_FREE_BTLS;
+enum cycleStatates {READ_FREE_BTLS, AUTH, WAIT_AUTH, READ_USER_BTLS, CREDITUSER, WAIT_CREDITUSER, INIT};
+cycleStatates state = INIT;
 
 //-------------------------------------------------------------
 // THB request timer variables
@@ -111,7 +111,7 @@ void loop()
 {  
     if ( !client.connected() ) {
       reconnect();
-      state = READ_FREE_BTLS;
+      state = INIT;
       stopServerRequestTimer();
       }
 
@@ -119,6 +119,7 @@ void loop()
     if (state == READ_FREE_BTLS) {
       
       if (checkBottleAndSend()) {
+         requestToLedDevice(RED, "FLASH");
          state = READ_FREE_BTLS;
       }
 
@@ -131,6 +132,7 @@ void loop()
     //Card read - check user and wait for server
     if (state == AUTH ) {
           // call server for authentication
+          requestToLedDevice(BLUE, "ON");
           requestUserAuthentication(uidString);
           state = WAIT_AUTH;
       }
@@ -140,10 +142,12 @@ void loop()
           // note: async userAuthenticated variable is set by the server response on methods called by on_message()
           if(userAuthenticated) {
             Serial.println("user ok");
+            requestToLedDevice(BLUE, "FLASH");
             state = READ_USER_BTLS;
           }  else {                
             Serial.println("user Not Auth");
-            state = END;
+            requestToLedDevice(RED, "FLASH");
+            state = INIT;
             }
             
       }
@@ -151,7 +155,6 @@ void loop()
     // User identified -> keep reading bottles until user passes card again
     if (state == READ_USER_BTLS) {
             // call server to set led
-            //requestToLedDevice(GREEN, "ON");
 
             if (checkBottleAndSend()) {
               Serial.println("bottle ok");
@@ -159,11 +162,12 @@ void loop()
               userTotalBottles++;
               
               // flash to signal bottle ok
-              //requestToLedDevice(GREEN, "FLASH");
+              requestToLedDevice(GREEN, "FLASH");
             }
 
             if (readRFIDCard() ==0) {
               Serial.println("Card detected");
+              requestToLedDevice(BLUE, "ON");
               state = CREDITUSER;
             }      
    
@@ -173,6 +177,7 @@ void loop()
     if (state == CREDITUSER && isServerRequestTimerInProgress() == false) {
               requestCreditToUser(uidString);
               state = WAIT_CREDITUSER;
+              requestToLedDevice(BLUE, "FLASH");
     }
 
     // wait for server 
@@ -180,20 +185,23 @@ void loop()
               // note: async userCredited variable is set by the server response on methods called by on_message()
               if (userCredited) {
                 Serial.println("user credited");
-                 state = END;
+                 state = INIT;
               } else {
                 Serial.println("user NOT credited");
-                 state = END;
+                 state = INIT;
               }
     }
 
-    if (state == END) {
+    if (state == INIT) {
        state = READ_FREE_BTLS;
+
        userTotalBottles = 0;
        userCredited = false;
        userAuthenticated = false;
        serverRequestInProgress = false;
-       Serial.println("-------- END ------------");
+
+       requestToLedDevice(RED, "ON");
+       Serial.println("-------- INIT ------------");
     }
  
   // check for server timeout
@@ -204,23 +212,44 @@ void loop()
 }
 
 // server RPC Request only
-void  requestToLedDevice(LEDColors ledColor, String action)
+void  requestToLedDevice(int ledColor, String action)
 {
-    const int capacity = JSON_OBJECT_SIZE(3);
-    StaticJsonDocument<capacity> doc;
-    doc["LedBehaviour"] = action;
-    doc["Color"] = ledColor;
-    
-    String output = "";
-    serializeJson(doc, output);
-    
-    Serial.print("json to send:");
-    Serial.println(output);
+    if (isServerRequestTimerInProgress() == false) {
+      startServerRequestTimer();
+      
+      const int capacity = JSON_OBJECT_SIZE(10);
+      StaticJsonDocument<capacity> doc;
+      doc["method"] = "Led";
+      JsonObject obj = doc.createNestedObject("params");
+      obj["Action"] = action;
+      obj["Color"] = ledColor;
 
-   char attributes[100];
-   output.toCharArray( attributes, 100 );
-   if (client.publish( requestTopic, attributes ) == true)
-    Serial.println("publicado ok");
+       
+      String output = "";
+      serializeJson(doc, output);
+      
+      Serial.print("json to send:");
+      Serial.println(output);
+  
+     char attributes[100];
+     output.toCharArray( attributes, 100 );
+     
+     requestNumber++;
+      
+      String requestTopic = String("v1/devices/me/rpc/request/") + String(requestNumber);
+  
+      Serial.print("TOPIC:");
+      Serial.print(requestTopic);
+      Serial.print("  --- >json to send:");
+      Serial.println(output);
+      
+     if (client.publish(requestTopic.c_str() , attributes ) == true) {
+        Serial.println("publish resquest ok");
+      } else {
+         Serial.println("publish request ERROR");
+         stopServerRequestTimer();
+      } 
+    }    
 }
 
 // server RPC Request only & Reply (see on_message)
@@ -362,7 +391,7 @@ void processRequest(char *message)
     userCredited = true;
   } else {
         userAuthenticated = true;
-            userCredited = true;
+        userCredited = true;
   }
 }
 

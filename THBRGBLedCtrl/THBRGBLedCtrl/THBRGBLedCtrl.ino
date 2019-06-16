@@ -7,13 +7,13 @@
 //***************MODIFICAR PARA SU PROYECTO *********************
 //  configuración datos wifi 
 // descomentar el define y poner los valores de su red y de su dispositivo
-#define WIFI_AP "NOMBRE_RED"
-#define WIFI_PASSWORD "PASSWORD_RED"
+#define WIFI_AP "wifiname"
+#define WIFI_PASSWORD "passwifi"
 
 
 //  configuración datos thingsboard
-#define NODE_NAME "Nombre dispositivo THB"   //nombre que le pusieron al dispositivo cuando lo crearon
-#define NODE_TOKEN "Token dispositivo THB"   //Token que genera Thingboard para dispositivo cuando lo crearon
+#define NODE_NAME "LEDCTRL"   //nombre que le pusieron al dispositivo cuando lo crearon
+#define NODE_TOKEN "token"   //Token que genera Thingboard para dispositivo cuando lo crearon
 
 
 //***************NO MODIFICAR *********************
@@ -35,16 +35,20 @@ PubSubClient client(wifiClient);
 // declarar variables control loop (para no usar delay() en loop
 unsigned long lastSend;
 int elapsedTime = 1000; // tiempo transcurrido entre envios al servidor
-
+const int MaxFlash = 20; 
 
 
 //-------------------------------------------------------------
 // LED Pins
-int redpin = D0; // select the pin for the red LED = 1
-int bluepin = D1; // select the pin for the blue LED
-int greenpin = D2 ;// select the pin for the green LED
-enum LEDColors {RED, BLUE, GREEN} ledColor;
 
+
+int redpin = 16; // select the pin for the red LED = 1
+int bluepin = 5; // select the pin for the blue LED
+int greenpin = 4 ;// select the pin for the green LED
+
+int ledPins[] = {redpin, bluepin, greenpin};
+enum LEDColors {RED, BLUE, GREEN} ledColor;
+int activeLedPin; 
 
 void setup() { 
   Serial.begin(9600);
@@ -60,11 +64,13 @@ void setup() {
   lastSend = 0; // para controlar cada cuanto tiempo se envian datos
 
   // led setup
-  pinMode (redpin, OUTPUT);
-  pinMode (bluepin, OUTPUT);
-  pinMode (greenpin, OUTPUT);
+  pinMode (ledPins[RED], OUTPUT);
+  pinMode (ledPins[BLUE], OUTPUT);
+  pinMode (ledPins[GREEN], OUTPUT);
   ledColor = RED;
-  
+  activeLedPin = RED; 
+
+  digitalWrite(ledPins[activeLedPin],HIGH);
 }
  
 void loop() 
@@ -106,6 +112,18 @@ void on_message(const char* topic, byte* payload, unsigned int length)
 
 
 //Metodo para procesar requests
+
+/*  formato JSON
+ * {
+    "method": "Led",
+    "params": {
+        "Action": "ON",
+        "Color": 0
+    }
+}
+*/
+
+
 void processRequest(char *message)
 {
 
@@ -123,31 +141,38 @@ void processRequest(char *message)
   }
 
   String method = doc["method"];
-  int ledIndex = doc["params"];
-  switch(ledIndex) {
-    case RED:
-      digitalWrite(redpin,HIGH);
-      delay(1000);
-      digitalWrite(redpin,LOW); 
-      break;
-    case BLUE:
-      digitalWrite(bluepin,HIGH);
-      delay(1000);
-      digitalWrite(bluepin,LOW); 
-      break ;
-    case GREEN:
-      digitalWrite(greenpin,HIGH);
-      delay(1000);
-      digitalWrite(greenpin,LOW); 
-      break ;
-     default:
-        digitalWrite(redpin,HIGH);
-        break;
-     
-    }
+  String action = doc["params"]["Action"];
+  int ledPin = doc["params"]["Color"];
+      
+   if (activeLedPin != ledPin) { // LED cahnged turnoff active
+          digitalWrite(ledPins[activeLedPin],LOW);
+          activeLedPin = ledPin;
+      }
+ 
+    Serial.print("Action RCV:");
+    Serial.print(action);
+    
+    if (action.equals("ON")) {
+          Serial.print("ON LED on pin:");
+          Serial.println(ledPin);
+          digitalWrite(ledPins[ledPin],HIGH);
+      } else {
+        flashLED(ledPin);
+      } 
  
 }
 
+void flashLED(int ledPin)
+{
+  Serial.print("FLASH LED on pin:");
+  Serial.println(ledPin);
+  for (int i =0; i < MaxFlash; i++) {
+      digitalWrite(ledPins[ledPin],HIGH);
+      delay(50);
+      digitalWrite(ledPins[ledPin],LOW);
+      delay(50);
+  }
+}
 //***************NO MODIFICAR - Conexion con Wifi y ThingsBoard *********************
 /*
  * funcion para reconectarse al servidor de thingsboard y suscribirse a los topicos de RPC y Atributos
