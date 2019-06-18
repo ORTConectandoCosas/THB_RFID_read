@@ -12,11 +12,11 @@
     "nodes": [
       {
         "additionalInfo": {
-          "layoutX": 709,
-          "layoutY": 59
+          "layoutX": 892,
+          "layoutY": 34
         },
         "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
-        "name": "SendReplyUser",
+        "name": "SendAuthReply",
         "debugMode": true,
         "configuration": {
           "jsScript": "var newMsg = {};\n\nif (msg.method == \"checkUserID\") {\n    var usr = msg.params.trim();\n    if (usr.trim() == metadata.ss_User1_ID.trim()) {\n        newMsg.method = \"UserApr\";\n        newMsg.params = true;\n    } else {\n        newMsg.method = \"UserApr\";\n        newMsg.params = false;\n    }\n    msgType = 'RPC messageToRFIDController';\n    return {msg: newMsg, metadata: metadata, msgType: msgType};\n} else if(msg.method == \"creditPointsToUser\") {\n    msgType = 'POST_ATTRIBUTES_REQUEST';\n    return {msg: msg, metadata: metadata, msgType: msgType};\n} else if (msg.method == \"Led\") {\n    msgType = 'REQUEST_TO_DEVICE';\n    metadata.deviceType = \"LedController\";\n    metadata.deviceName = \"LEDCTRL\";\n    return {msg: msg, metadata: metadata, msgType: msgType};\n}\n"
@@ -24,8 +24,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 211,
-          "layoutY": 261
+          "layoutX": 229,
+          "layoutY": 83
         },
         "type": "org.thingsboard.rule.engine.filter.TbMsgTypeSwitchNode",
         "name": "mseesageRouter",
@@ -36,8 +36,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 933,
-          "layoutY": 199
+          "layoutX": 1014,
+          "layoutY": 217
         },
         "type": "org.thingsboard.rule.engine.rpc.TbSendRPCReplyNode",
         "name": "SendUsrData",
@@ -48,8 +48,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 220,
-          "layoutY": 25
+          "layoutX": 422,
+          "layoutY": 293
         },
         "type": "org.thingsboard.rule.engine.telemetry.TbMsgTimeseriesNode",
         "name": "save to series",
@@ -60,8 +60,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 425,
-          "layoutY": 96
+          "layoutX": 480,
+          "layoutY": 21
         },
         "type": "org.thingsboard.rule.engine.metadata.TbGetAttributesNode",
         "name": "AddUserData",
@@ -79,8 +79,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 637,
-          "layoutY": 222
+          "layoutX": 755,
+          "layoutY": 123
         },
         "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
         "name": "checkMsgCtrl",
@@ -91,8 +91,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 689,
-          "layoutY": 306
+          "layoutX": 819,
+          "layoutY": 304
         },
         "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
         "name": "updateCredit",
@@ -103,8 +103,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 939,
-          "layoutY": 525
+          "layoutX": 957,
+          "layoutY": 524
         },
         "type": "org.thingsboard.rule.engine.telemetry.TbMsgAttributesNode",
         "name": "saveCredit",
@@ -115,8 +115,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 828,
-          "layoutY": 409
+          "layoutX": 944,
+          "layoutY": 403
         },
         "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
         "name": "addCredit",
@@ -168,8 +168,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 676,
-          "layoutY": 640
+          "layoutX": 727,
+          "layoutY": 548
         },
         "type": "org.thingsboard.rule.engine.rpc.TbSendRPCRequestNode",
         "name": "SendToLed",
@@ -180,16 +180,16 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 559,
-          "layoutY": 388
+          "layoutX": 660,
+          "layoutY": 378
         },
         "type": "org.thingsboard.rule.engine.transform.TbChangeOriginatorNode",
-        "name": "changeTOLedCtro",
+        "name": "changeTOLedCtrl",
         "debugMode": true,
         "configuration": {
           "originatorSource": "RELATED",
           "relationsQuery": {
-            "direction": "FROM",
+            "direction": "TO",
             "maxLevel": 1,
             "filters": [
               {
@@ -204,26 +204,26 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 550,
-          "layoutY": 569
+          "layoutX": 541,
+          "layoutY": 176
         },
-        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
-        "name": "creatLedCommand",
+        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
+        "name": "RouteToDeviceBasedOnMethod",
         "debugMode": true,
         "configuration": {
-          "jsScript": "\nreturn {msg: msg, metadata: metadata, msgType: msgType};"
+          "jsScript": "return (msg.method == \"Led\");\n"
         }
       },
       {
         "additionalInfo": {
           "layoutX": 490,
-          "layoutY": 474
+          "layoutY": 461
         },
-        "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
-        "name": "checkIfForLed",
+        "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
+        "name": "changeOriginatorData",
         "debugMode": true,
         "configuration": {
-          "jsScript": "return (msgType === 'REQUEST_TO_DEVICE');"
+          "jsScript": "metadata.deviceType = \"LedController\";\nmetadata.deviceName = \"LEDCtrl\";\nreturn {msg: msg, metadata: metadata, msgType: msgType};"
         }
       }
     ],
@@ -240,13 +240,13 @@
       },
       {
         "fromIndex": 1,
-        "toIndex": 9,
-        "type": "Post telemetry"
+        "toIndex": 14,
+        "type": "RPC Request from Device"
       },
       {
-        "fromIndex": 1,
-        "toIndex": 4,
-        "type": "RPC Request from Device"
+        "fromIndex": 3,
+        "toIndex": 9,
+        "type": "Success"
       },
       {
         "fromIndex": 4,
@@ -262,11 +262,6 @@
         "fromIndex": 5,
         "toIndex": 2,
         "type": "True"
-      },
-      {
-        "fromIndex": 6,
-        "toIndex": 13,
-        "type": "False"
       },
       {
         "fromIndex": 6,
@@ -300,13 +295,18 @@
       },
       {
         "fromIndex": 14,
-        "toIndex": 12,
-        "type": "Success"
+        "toIndex": 4,
+        "type": "False"
+      },
+      {
+        "fromIndex": 14,
+        "toIndex": 13,
+        "type": "True"
       },
       {
         "fromIndex": 15,
-        "toIndex": 14,
-        "type": "True"
+        "toIndex": 12,
+        "type": "Success"
       }
     ],
     "ruleChainConnections": null

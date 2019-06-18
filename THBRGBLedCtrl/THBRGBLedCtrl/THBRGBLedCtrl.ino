@@ -8,12 +8,12 @@
 //  configuración datos wifi 
 // descomentar el define y poner los valores de su red y de su dispositivo
 #define WIFI_AP "wifiname"
-#define WIFI_PASSWORD "passwifi"
+#define WIFI_PASSWORD "wifipass"
 
 
 //  configuración datos thingsboard
 #define NODE_NAME "LEDCTRL"   //nombre que le pusieron al dispositivo cuando lo crearon
-#define NODE_TOKEN "token"   //Token que genera Thingboard para dispositivo cuando lo crearon
+#define NODE_TOKEN "thb token"   //Token que genera Thingboard para dispositivo cuando lo crearon
 
 
 //***************NO MODIFICAR *********************
@@ -47,8 +47,13 @@ int bluepin = 5; // select the pin for the blue LED
 int greenpin = 4 ;// select the pin for the green LED
 
 int ledPins[] = {redpin, bluepin, greenpin};
-enum LEDColors {RED, BLUE, GREEN} ledColor;
-int activeLedPin; 
+
+//enum LEDColors {RED, BLUE, GREEN} ledColor;
+const int RED  = 0;
+const int BLUE  = 1;
+const int GREEN  = 2;
+int activeLedPin;
+int ledColor;
 
 void setup() { 
   Serial.begin(9600);
@@ -68,9 +73,10 @@ void setup() {
   pinMode (ledPins[BLUE], OUTPUT);
   pinMode (ledPins[GREEN], OUTPUT);
   ledColor = RED;
-  activeLedPin = RED; 
 
-  digitalWrite(ledPins[activeLedPin],HIGH);
+
+  digitalWrite(ledPins[ledColor],HIGH);
+  activeLedPin = RED;
 }
  
 void loop() 
@@ -101,10 +107,7 @@ void on_message(const char* topic, byte* payload, unsigned int length)
   // Verificar el topico por el cual llegó el mensaje, puede ser un cambio de atributos o un request
   if (strcmp(topic, "v1/devices/me/attributes") ==0) { //es un cambio en atributos compartidos
     Serial.println("----> CAMBIO DE ATRIBUTOS");
- //   processAttributeRequestCommand(message);
   } else {
-    // es un request
-    Serial.println("----> REQUEST");
     processRequest(message);
   }
 
@@ -143,25 +146,30 @@ void processRequest(char *message)
   String method = doc["method"];
   String action = doc["params"]["Action"];
   int ledPin = doc["params"]["Color"];
-      
-   if (activeLedPin != ledPin) { // LED cahnged turnoff active
-          digitalWrite(ledPins[activeLedPin],LOW);
-          activeLedPin = ledPin;
-      }
+
  
     Serial.print("Action RCV:");
     Serial.print(action);
     
     if (action.equals("ON")) {
-          Serial.print("ON LED on pin:");
-          Serial.println(ledPin);
-          digitalWrite(ledPins[ledPin],HIGH);
-      } else {
-        flashLED(ledPin);
-      } 
+      setLedOn(ledPin);
+    } else {
+      flashLED(ledPin);
+    } 
  
 }
 
+void setLedOn(int ledPin)
+{
+  if (activeLedPin != ledPin) {
+     digitalWrite(ledPins[activeLedPin],LOW);
+  } else {
+    Serial.print("ON LED on pin:");
+    Serial.println(ledPin);
+    digitalWrite(ledPins[ledPin],HIGH);
+    activeLedPin = ledPin;
+  }
+}
 void flashLED(int ledPin)
 {
   Serial.print("FLASH LED on pin:");

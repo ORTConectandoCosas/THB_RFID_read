@@ -18,7 +18,7 @@
 
 //  configuración datos thingsboard
 #define NODE_NAME "RFIDCLIENT"   //nombre que le pusieron al dispositivo cuando lo crearon
-#define NODE_TOKEN "token"   //Token que genera Thingboard para dispositivo cuando lo crearon
+#define NODE_TOKEN "thbtoken"   //Token que genera Thingboard para dispositivo cuando lo crearon
 
 
 //***************NO MODIFICAR *********************
@@ -62,7 +62,10 @@ int avoidancePin = D1;
 
 //-------------------------------------------------------------
 //Led colors
-enum LEDColors {RED, BLUE, GREEN} ledColor;
+const int RED  = 0;
+const int BLUE  = 1;
+const int GREEN  = 2;
+
 //-------------------------------------------------------------
 
 //-------------------------------------------------------------
@@ -78,7 +81,7 @@ cycleStatates state = INIT;
 // THB request timer variables
 //-------------------------------------------------------------
 unsigned long lastSend;
-int elapsedTime = 3000; // elapsed time request vs reply
+int elapsedTime = 9000; // elapsed time request vs reply
 int requestNumber =1;  
 bool serverRequestInProgress = false;
 
@@ -200,7 +203,8 @@ void loop()
        userAuthenticated = false;
        serverRequestInProgress = false;
 
-       requestToLedDevice(RED, "ON");
+       requestToLedDevice(RED, "FLASH");
+
        Serial.println("-------- INIT ------------");
     }
  
@@ -213,10 +217,7 @@ void loop()
 
 // server RPC Request only
 void  requestToLedDevice(int ledColor, String action)
-{
-    if (isServerRequestTimerInProgress() == false) {
-      startServerRequestTimer();
-      
+{      
       const int capacity = JSON_OBJECT_SIZE(10);
       StaticJsonDocument<capacity> doc;
       doc["method"] = "Led";
@@ -248,8 +249,7 @@ void  requestToLedDevice(int ledColor, String action)
       } else {
          Serial.println("publish request ERROR");
          stopServerRequestTimer();
-      } 
-    }    
+      }    
 }
 
 // server RPC Request only & Reply (see on_message)
