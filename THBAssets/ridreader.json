@@ -204,8 +204,8 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 541,
-          "layoutY": 176
+          "layoutX": 523,
+          "layoutY": 177
         },
         "type": "org.thingsboard.rule.engine.filter.TbJsFilterNode",
         "name": "RouteToDeviceBasedOnMethod",
@@ -216,14 +216,26 @@
       },
       {
         "additionalInfo": {
-          "layoutX": 490,
-          "layoutY": 461
+          "layoutX": 470,
+          "layoutY": 553
         },
         "type": "org.thingsboard.rule.engine.transform.TbTransformMsgNode",
         "name": "changeOriginatorData",
         "debugMode": true,
         "configuration": {
-          "jsScript": "metadata.deviceType = \"LedController\";\nmetadata.deviceName = \"LEDCtrl\";\nreturn {msg: msg, metadata: metadata, msgType: msgType};"
+          "jsScript": "//metadata.deviceType = \"LedController\";\n//metadata.deviceName = \"LEDCtrl\";\nmetadata.requestType = 'oneway';\nmsgType = 'new LEDCtrl message'\n\nreturn {msg: msg, metadata: metadata, msgType: msgType};"
+        }
+      },
+      {
+        "additionalInfo": {
+          "layoutX": 727,
+          "layoutY": 646
+        },
+        "type": "org.thingsboard.rule.engine.action.TbLogNode",
+        "name": "log",
+        "debugMode": true,
+        "configuration": {
+          "jsScript": "return 'Incoming message:\\n' + JSON.stringify(msg) + '\\nIncoming metadata:\\n' + JSON.stringify(metadata);"
         }
       }
     ],
@@ -286,6 +298,16 @@
       {
         "fromIndex": 10,
         "toIndex": 11,
+        "type": "Success"
+      },
+      {
+        "fromIndex": 12,
+        "toIndex": 16,
+        "type": "Failure"
+      },
+      {
+        "fromIndex": 12,
+        "toIndex": 16,
         "type": "Success"
       },
       {
